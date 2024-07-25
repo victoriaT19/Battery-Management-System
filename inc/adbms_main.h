@@ -24,7 +24,7 @@ and its licensor.
 //#include "main.h"
 #include "common.h"
 #include "adBms6830Data.h"
-#include "adBms6830GenericType.h"
+// #include "adBms6830GenericType.h"
 #include "adBms6830ParseCreate.h"
 #include "mcuWrapper.h"
 

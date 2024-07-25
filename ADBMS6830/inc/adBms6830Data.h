@@ -25,7 +25,7 @@ and its licensor.
 
 #include "common.h"
 
-#define CELL 16                 /* Bms ic number of cell              */
+#define CELL 4                  /* Bms ic number of cell              */
 #define AUX  12                 /* Bms ic number of Aux               */
 #define RAUX 10                 /* Bms ic number of RAux              */
 #define PWMA 12                 /* Bms ic number of PWMA              */

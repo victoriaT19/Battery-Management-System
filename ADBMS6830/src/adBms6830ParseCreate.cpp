@@ -157,9 +157,12 @@ uint16_t ConfigA_Gpo(GPO gpo, CFGA_GPO stat)
 uint16_t ConfigB_DccBit(DCC dcc, DCC_BIT dccbit)
 {
   uint16_t dccvalue;
+  // dccvalue = 0b0000 0000 0000 0100
+        //      0b0000 0000 0000 0001
   if(dccbit == DCC_BIT_SET)
   {
     dccvalue = (1 << dcc);
+    // dccvalue = 0b0000 0000 0000 0101
   }
   else
   {
