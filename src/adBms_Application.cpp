@@ -24,6 +24,7 @@ and its licensor.
 #include "mcuWrapper.h"
 #include <chrono>
 #include <cstdint>
+#include <cstdio>
 #ifdef MBED
 // extern Serial pc;
 #endif
@@ -34,7 +35,7 @@ and its licensor.
 *******************************************************************************
 */
 
-// Chave
+// A função DigitalOut indica que o pino D8 do microcontrolador foi reservado para o controle da Chave
 DigitalOut Chave(D8,0);
 
 #define TOTAL_IC 1
@@ -44,6 +45,8 @@ void adBms6830_infinte_loop(uint8_t tIC, cell_asic *ic);
 void adBms6830_test_SLEEP(uint8_t tIC, cell_asic *ic);
 void adBms6830_clear_sleep_register(uint8_t tIC); // modificado
 void adBms6830_balancing(uint8_t tIC, cell_asic *ic);
+void adBms6830_balancing_test(uint8_t tIC, cell_asic *ic);
+void adBms6830_clear_dcc(uint8_t tIC, cell_asic *ic);
 
 /* ADC Command Configurations */
 RD      REDUNDANT_MEASUREMENT           = RD_OFF;
@@ -57,8 +60,8 @@ RSTF    RESET_FILTER                    = RSTF_OFF;
 ERR     INJECT_ERR_SPI_READ             = WITHOUT_ERR;
 
 /* Set Under Voltage and Over Voltage Thresholds */
-const float DCC_DIF = 0.3;                      /* difference between average and cell voltages*/
-const float OV_THRESHOLD = 3.985;                 /* Volt */
+const float DCC_DIF = 0.033;                      /* difference between average and cell voltages*/
+const float OV_THRESHOLD = 4.1;                 /* Volt */
 const float UV_THRESHOLD = 3.0;                 /* Volt */
 const int OWC_Threshold = 2000;                 /* Cell Open wire threshold(mili volt) */
 const int OWA_Threshold = 50000;                /* Aux Open wire threshold(mili volt) */
@@ -218,17 +221,25 @@ void run_command(int cmd)
   case 25:
     adBms6830_start_adc_cell_voltage_measurment(TOTAL_IC);
     adBms6830_read_cell_voltages(TOTAL_IC, &IC[0]);
-    adBms6830_start_avgcell_voltage_measurment(TOTAL_IC);
-    adBms6830_read_avgcell_voltages(TOTAL_IC, &IC[0]);
     adBms6830_balancing(TOTAL_IC, &IC[0]);
     break;
 
   case 26:
+    adBms6830_start_adc_cell_voltage_measurment(TOTAL_IC);
+    adBms6830_read_cell_voltages(TOTAL_IC, &IC[0]);
+    adBms6830_balancing_test(TOTAL_IC, &IC[0]);
+    break;
+
+  case 27:
     Chave.write(1);
     break;
     
-  case 27:
+  case 28:
     Chave.write(0);
+    break;
+
+  case 29:
+    adBms6830_clear_dcc(TOTAL_IC, &IC[0]);
     break;
 
   case 0:
@@ -264,14 +275,15 @@ void adBms6830_init_config(uint8_t tIC, cell_asic *ic)
     ic[cic].tx_cfgb.dtmen = DTMEN_OFF;
     ic[cic].tx_cfgb.vov = SetOverVoltageThreshold(OV_THRESHOLD);
     ic[cic].tx_cfgb.vuv = SetUnderVoltageThreshold(UV_THRESHOLD);
-    ic[cic].tx_cfgb.dcc |= ConfigB_DccBit(DCC1, DCC_BIT_SET);
-    ic[cic].tx_cfgb.dcc |= ConfigB_DccBit(DCC4, DCC_BIT_SET);
+    // ic[cic].tx_cfgb.dcc |= ConfigB_DccBit(DCC1, DCC_BIT_SET);
+    // ic[cic].tx_cfgb.dcc |= ConfigB_DccBit(DCC4, DCC_BIT_SET);
 //    SetConfigB_DischargeTimeOutValue(tIC, &ic[cic], RANG_0_TO_63_MIN, TIME_1MIN_OR_0_26HR);
   }
   adBmsWakeupIc(tIC);
   adBmsWriteData(tIC, &ic[0], WRCFGA, Config, A);
   adBmsWriteData(tIC, &ic[0], WRCFGB, Config, B);
 }
+
 
 /**
 *******************************************************************************
@@ -759,75 +771,243 @@ void adBms6830_test_SLEEP(uint8_t tIC, cell_asic *ic)
   // ThisThread::sleep_for(chrono::milliseconds(500));
   // adBms6830_read_status_registers(tIC, &ic[0]);
 
-  /**
-*******************************************************************************
-* @brief Test Balancing
-*******************************************************************************
-*/
 
 }
+
+
+  /**
+*******************************************************************************
+* @brief Test Unbalanced cell and overvoltage
+*******************************************************************************
+*/
 
 void adBms6830_balancing(uint8_t tIC, cell_asic *ic)
 {
     float voltage = 0, avg_voltage = 0;
-//   int count = 0;
-//   // Entender melhor como funcionam os registradores de configuração
-//   adBmsWakeupIc(tIC);
-//   adBmsWriteData(tIC, &ic[0], WRCFGA, Config, A);
-//   adBmsWriteData(tIC, &ic[0], WRCFGB, Config, B);
 
-   while(1) {
-   // Start adc conversion
-    voltage = 0;
-    avg_voltage = 0;
-    adBmsWakeupIc(tIC);
-    adBms6830_Adcv(REDUNDANT_MEASUREMENT, CONTINUOUS_MEASUREMENT, DISCHARGE_PERMITTED, RESET_FILTER, CELL_OPEN_WIRE_DETECTION);
-    pladc_count = adBmsPollAdc(PLADC);
+    while(1) {
 
-    // Read cell voltage
-    adBmsReadData(tIC, &ic[0], RDCVA, Cell, A);
-    adBmsReadData(tIC, &ic[0], RDCVB, Cell, B);
-    adBmsReadData(tIC, &ic[0], RDCVC, Cell, C);
-    adBmsReadData(tIC, &ic[0], RDCVD, Cell, D);
-    adBmsReadData(tIC, &ic[0], RDCVE, Cell, E);
-    adBmsReadData(tIC, &ic[0], RDCVF, Cell, F);
-    printVoltages(tIC, &ic[0], Cell);
+      voltage = 0;
+      avg_voltage = 0;
 
-    // Read Avarage Cell Voltages
-    // adBmsWakeupIc(tIC);
-    // adBmsReadData(tIC, &ic[0], RDACA, AvgCell, A);
-    // adBmsReadData(tIC, &ic[0], RDACB, AvgCell, B);
-    // adBmsReadData(tIC, &ic[0], RDACC, AvgCell, C);
-    // adBmsReadData(tIC, &ic[0], RDACD, AvgCell, D);
-    // adBmsReadData(tIC, &ic[0], RDACE, AvgCell, E);
-    // adBmsReadData(tIC, &ic[0], RDACF, AvgCell, F);
-    // printVoltages(tIC, &ic[0], AvgCell);
-    
-    adBms6830_write_read_config(TOTAL_IC, &IC[0]);
+      // Start adc conversion
+      adBmsWakeupIc(tIC);
+      adBms6830_Adcv(REDUNDANT_MEASUREMENT, CONTINUOUS_MEASUREMENT, DISCHARGE_PERMITTED, RESET_FILTER, CELL_OPEN_WIRE_DETECTION);
+      pladc_count = adBmsPollAdc(PLADC);
 
-    for (uint8_t i = 0; i < CELL; i++) {
+      // Read cell voltage
+      adBmsWakeupIc(tIC);
+      adBmsReadData(tIC, &ic[0], RDCVA, Cell, A);
+      adBmsReadData(tIC, &ic[0], RDCVB, Cell, B);
+      adBmsReadData(tIC, &ic[0], RDCVC, Cell, C);
+      adBmsReadData(tIC, &ic[0], RDCVD, Cell, D);
+      adBmsReadData(tIC, &ic[0], RDCVE, Cell, E);
+      adBmsReadData(tIC, &ic[0], RDCVF, Cell, F);
+      printVoltages(tIC, &ic[0], Cell);
 
-        avg_voltage += getVoltage(IC[0].cell.c_codes[i]);
-        if (getVoltage(IC[0].cell.c_codes[i]) > OV_THRESHOLD) {
+      adBms6830_write_read_config(TOTAL_IC, &IC[0]);
+
+      for (uint8_t i = 0; i < CELL; i++) {
+
+         avg_voltage += getVoltage(IC[0].cell.c_codes[i]);
+         if (getVoltage(IC[0].cell.c_codes[i]) > OV_THRESHOLD) {
             printf("C%d OVERVOLTAGE!!", i+1);
             Chave.write(1);
             return;
         }
     }
-    // avg_voltage = avg_voltage/CELL;
-    // printf("Tensao Media:%fV\n",avg_voltage);
+
+      avg_voltage = avg_voltage/CELL;
+      printf("Tensao Media:%fV\n",avg_voltage);
     
-    // for (uint8_t j = 0; j < CELL; j++) {
-    //     voltage = getVoltage(IC[0].cell.c_codes[j]);
-    //     if (abs(avg_voltage - voltage) > DCC_DIF) {
-    //         printf("\nC%d=%fV ESTA DESBALANCEADA", j+1, voltage);
-    //         return;
-    //     }
-        
-    // }
+      for (uint8_t j = 0; j < CELL; j++) {
+         adBmsWakeupIc(tIC);
+         adBms6830_Adcv(REDUNDANT_MEASUREMENT, CONTINUOUS_MEASUREMENT,         DISCHARGE_PERMITTED, RESET_FILTER, CELL_OPEN_WIRE_DETECTION);
+         pladc_count = adBmsPollAdc(PLADC);
+
+         voltage = getVoltage(IC[0].cell.c_codes[j]);
+         if (abs(avg_voltage - voltage) > DCC_DIF) {
+             printf("\nC%d=%fV ESTA DESBALANCEADA", j+1, voltage);
+             return;
+        }
+    }
   }
   
 }
 
-/** @}*/
-/** @}*/
+  /**
+*******************************************************************************
+* @brief Test Balancing without PWM
+*******************************************************************************
+*/
+
+void adBms6830_balancing_test(uint8_t tIC, cell_asic *ic)
+{
+    uint8_t max_index, min_index;
+    float max_tensao, min_tensao;
+    int DCC_cont[16] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
+    float aux;
+
+    while(1) {
+
+      // Start adc conversion
+      adBmsWakeupIc(tIC);
+      adBms6830_Adcv(REDUNDANT_MEASUREMENT, CONTINUOUS_MEASUREMENT, DISCHARGE_PERMITTED, RESET_FILTER, CELL_OPEN_WIRE_DETECTION);
+      pladc_count = adBmsPollAdc(PLADC);
+
+      // Read cell voltage
+      adBmsWakeupIc(tIC);
+      adBmsReadData(tIC, &ic[0], RDCVA, Cell, A);
+      adBmsReadData(tIC, &ic[0], RDCVB, Cell, B);
+      adBmsReadData(tIC, &ic[0], RDCVC, Cell, C);
+      adBmsReadData(tIC, &ic[0], RDCVD, Cell, D);
+      adBmsReadData(tIC, &ic[0], RDCVE, Cell, E);
+      adBmsReadData(tIC, &ic[0], RDCVF, Cell, F);
+      printVoltages(tIC, &ic[0], Cell);
+
+      adBms6830_write_read_config(TOTAL_IC, &IC[0]);
+
+    // Encontra a célula com maior tensão
+      for (uint8_t i = 0; i < CELL; i++) {
+        if (getVoltage(IC[0].cell.c_codes[i]) > max_tensao) {
+            max_tensao = getVoltage(IC[0].cell.c_codes[i]);
+            max_index = i;
+        }
+      }
+
+    // Encontrar a célula com menor tensão
+      for (uint8_t i = 0; i < CELL; i++) {
+        if (getVoltage(IC[0].cell.c_codes[i]) < min_tensao) {
+            min_tensao = getVoltage(IC[0].cell.c_codes[i]);
+            min_index = i;
+        }
+      } 
+     
+    // Verificar se a diferença de tensão excede o limiar de balanceamento
+      if ((max_tensao - min_tensao) > DCC_DIF) {
+
+        // Ativar o balanceamento na célula com maior tensão e indica qual célula é essa
+        ic[0].tx_cfgb.dcc |= ConfigB_DccBit(max_index, DCC_BIT_SET);
+        DCC_cont[max_index] = 1;
+        adBmsWakeupIc(tIC);
+        adBmsWriteData(tIC, &ic[0], WRCFGA, Config, A);
+        adBmsWriteData(tIC, &ic[0], WRCFGB, Config, B);
+
+        // Repetição para printar quais células estão sendo balanceadas e Desativar balanceamento se as tensões estiverem balanceadas
+        for (uint8_t i = 0; i < CELL; i++) {
+            if (DCC_cont[i] == 1){
+                printf("Balanceando célula C%d\n", i+1);
+                aux = getVoltage(IC[0].cell.c_codes[i]);
+
+                if ((aux - min_tensao) <= DCC_DIF){
+                    ic[0].tx_cfgb.dcc |= ConfigB_DccBit(i, DCC_BIT_CLR);
+                    DCC_cont[i] = 0;
+                    adBmsWakeupIc(tIC);
+                    adBmsWriteData(tIC, &ic[0], WRCFGA, Config, A);
+                    adBmsWriteData(tIC, &ic[0], WRCFGB, Config, B);
+
+                }
+            }
+      } 
+
+     }
+    Delay_ms(1000);
+    for (uint8_t i = 0; i < CELL; i++) {
+        printf("%d",DCC_cont[i]);
+        }
+      
+  }
+}
+
+// void adBms6830_balancing_test(uint8_t tIC, cell_asic *ic)
+// {
+//     uint8_t max_index, min_index;
+//     float voltage=0, min_tensao=0;
+//     int balance_cell[16] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
+//     float aux;
+
+
+//     while(1) {
+
+      
+
+//       for (uint8_t i = 0; i < CELL; i++) {
+//             // Start adc conversion
+//         adBmsWakeupIc(tIC);
+//         adBms6830_Adcv(REDUNDANT_MEASUREMENT, CONTINUOUS_MEASUREMENT, DISCHARGE_PERMITTED, RESET_FILTER, CELL_OPEN_WIRE_DETECTION);
+//         pladc_count = adBmsPollAdc(PLADC);
+
+//       // Read cell voltage
+//         adBmsWakeupIc(tIC);
+//         adBmsReadData(tIC, &ic[0], RDCVA, Cell, A);
+//         adBmsReadData(tIC, &ic[0], RDCVB, Cell, B);
+//         adBmsReadData(tIC, &ic[0], RDCVC, Cell, C);
+//         adBmsReadData(tIC, &ic[0], RDCVD, Cell, D);
+//         adBmsReadData(tIC, &ic[0], RDCVE, Cell, E);
+//         adBmsReadData(tIC, &ic[0], RDCVF, Cell, F);
+//       //  printVoltages(tIC, &ic[0], Cell);
+//         printStatus(tIC, &ic[0], Status, A);
+
+//         adBms6830_write_read_config(TOTAL_IC, &IC[0]);
+// 	    voltage = getVoltage(IC[0].cell.c_codes[i]);
+
+//         // Encontrar a célula com menor tensão
+//         for (uint8_t w = 0; w < CELL; w++) {
+//             if (getVoltage(IC[0].cell.c_codes[w]) < min_tensao) {
+//                 min_tensao = getVoltage(IC[0].cell.c_codes[w]);
+//                 min_index = w;
+//             }
+//         } 
+	
+// 	    if ((voltage - min_tensao) > DCC_DIF) {
+// 		    balance_cell[i] = 1; // Ativa o flag que essa célula está sendo balanceada
+	
+// 		    for (uint8_t k = 0; k < CELL; k++) {
+// 			    if (balance_cell[k] == 1) {
+// 			      printf("Balanceando célula %d\n", k+1);
+// 			      printf("Diferença em C%d: %f\n", k+1, voltage - min_tensao);
+//                   ic[0].tx_cfgb.dcc |= ConfigB_DccBit(k, DCC_BIT_SET);
+//                   adBmsWakeupIc(tIC);
+//                   adBmsWriteData(tIC, &ic[0], WRCFGA, Config, A);
+//                   adBmsWriteData(tIC, &ic[0], WRCFGB, Config, B);
+// 		}
+	        
+// 	        for (uint8_t j = 0; j < CELL; j++) {
+// 			// Verifica se o balanceamento dessa célula já está ativo
+// 			    if (balance_cell[j] == 1) {
+// 				// Se a célula já está balanceando, verificar se atingiu o equilíbrio
+// 			    	if ((getVoltage(IC[0].cell.c_codes[j] - min_tensao) <= DCC_DIF)) {
+// 					// Se já está equilibrada, desativar o balanceamento
+// 					ic[0].tx_cfgb.dcc |= ConfigB_DccBit(j, DCC_BIT_CLR);
+//                     adBmsWakeupIc(tIC);
+//                     adBmsWriteData(tIC, &ic[0], WRCFGA, Config, A);
+//                     adBmsWriteData(tIC, &ic[0], WRCFGB, Config, B);
+// 					balance_cell[j] = 0;
+// 				}
+// 			}
+// 		 }	
+//        }
+//      }
+//    }
+
+//     Delay_ms(1000);
+
+//  }
+// }   
+
+  /**
+*******************************************************************************
+* @brief Clear all dcc bits
+*******************************************************************************
+*/
+
+void adBms6830_clear_dcc(uint8_t tIC, cell_asic *ic)
+{
+    adBmsWakeupIc(tIC);
+    for (uint8_t i = 0; i < CELL; i++) {
+        ic[0].tx_cfgb.dcc |= ConfigB_DccBit(i, DCC_BIT_CLR);
+        adBmsWakeupIc(tIC);
+        adBmsWriteData(tIC, &ic[0], WRCFGA, Config, A);
+        adBmsWriteData(tIC, &ic[0], WRCFGB, Config, B);
+    }
+}

@@ -28,7 +28,7 @@ uint16_t SetOverVoltageThreshold(float volt);
 uint16_t SetUnderVoltageThreshold(float voltage);
 uint8_t ConfigA_Flag(FLAG_D flag_d, CFGA_FLAG flag);
 uint16_t ConfigA_Gpo(GPO gpo, CFGA_GPO stat);
-uint16_t ConfigB_DccBit(DCC dcc, DCC_BIT dccbit);
+uint16_t ConfigB_DccBit(uint8_t dcc, DCC_BIT dccbit);
 void SetConfigB_DischargeTimeOutValue(uint8_t tIC, cell_asic *ic, DTRNG timer_rang, DCTO timeout_value);
 void SetPwmDutyCycle(uint8_t tIC, cell_asic *ic, PWM_DUTY duty_cycle);
 void adBms6830ParseConfiga(uint8_t tIC, cell_asic *ic, uint8_t *data);

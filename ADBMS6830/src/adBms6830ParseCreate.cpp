@@ -154,7 +154,10 @@ uint16_t ConfigA_Gpo(GPO gpo, CFGA_GPO stat)
  *
  *******************************************************************************
 */
-uint16_t ConfigB_DccBit(DCC dcc, DCC_BIT dccbit)
+
+// uint16_t ConfigB_DccBit(DCC dcc, DCC_BIT dccbit) Essa é a linha de código original, mudamos o parâmetro da função para uint8_t. 
+
+uint16_t ConfigB_DccBit(uint8_t dcc, DCC_BIT dccbit)
 {
   uint16_t dccvalue;
   // dccvalue = 0b0000 0000 0000 0100
