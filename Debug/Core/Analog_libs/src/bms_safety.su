@@ -1,0 +1,8 @@
+../Core/Analog_libs/src/bms_safety.c:37:19:bms_safety_check_voltage	32	static
+../Core/Analog_libs/src/bms_safety.c:73:7:bms_safety_aux_to_celsius	24	static
+../Core/Analog_libs/src/bms_safety.c:85:19:bms_safety_check_temperature	32	static
+../Core/Analog_libs/src/bms_safety.c:120:19:bms_safety_check_open_wire	40	static
+../Core/Analog_libs/src/bms_safety.c:151:19:bms_safety_check_hw_flags	16	static
+../Core/Analog_libs/src/bms_safety.c:161:19:bms_safety_task	32	static
+../Core/Analog_libs/src/bms_safety.c:203:6:bms_safety_trigger_shutdown	16	static
+../Core/Analog_libs/src/bms_safety.c:216:6:bms_safety_clear_faults	16	static

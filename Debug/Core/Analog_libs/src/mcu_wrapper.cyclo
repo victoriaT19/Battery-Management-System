@@ -1,0 +1,12 @@
+../Core/Analog_libs/src/mcu_wrapper.c:39:6:bmsCsLow	1
+../Core/Analog_libs/src/mcu_wrapper.c:43:6:bmsCsHigh	1
+../Core/Analog_libs/src/mcu_wrapper.c:50:6:startTimer	1
+../Core/Analog_libs/src/mcu_wrapper.c:54:6:stopTimer	1
+../Core/Analog_libs/src/mcu_wrapper.c:59:10:getTimCount	1
+../Core/Analog_libs/src/mcu_wrapper.c:67:6:bmsWakeupIc	2
+../Core/Analog_libs/src/mcu_wrapper.c:79:6:Delay_ms	1
+../Core/Analog_libs/src/mcu_wrapper.c:83:6:delayUs	2
+../Core/Analog_libs/src/mcu_wrapper.c:94:6:delayMsActive	2
+../Core/Analog_libs/src/mcu_wrapper.c:106:6:spiWriteBytes	1
+../Core/Analog_libs/src/mcu_wrapper.c:110:6:spiWriteReadBytes	1
+../Core/Analog_libs/src/mcu_wrapper.c:115:6:spiReadBytes	1

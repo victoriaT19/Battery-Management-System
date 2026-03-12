@@ -1,0 +1,9 @@
+../Core/Analog_libs/src/bms_balancing.c:35:6:bms_balancing_set_pwm_cell	24	static
+../Core/Analog_libs/src/bms_balancing.c:60:6:bms_balancing_set_pwm_ic	32	static
+../Core/Analog_libs/src/bms_balancing.c:73:10:bms_encode_vuv	24	static
+../Core/Analog_libs/src/bms_balancing.c:80:10:bms_encode_vov	24	static
+../Core/Analog_libs/src/bms_balancing.c:90:6:bms_balancing_compute_stats	48	static
+../Core/Analog_libs/src/bms_balancing.c:123:6:bms_balancing_update	40	static
+../Core/Analog_libs/src/bms_balancing.c:149:6:bms_balancing_apply	72	static
+../Core/Analog_libs/src/bms_balancing.c:205:6:bms_balancing_stop_all	56	static
+../Core/Analog_libs/src/bms_balancing.c:233:6:bms_balancing_task	32	static

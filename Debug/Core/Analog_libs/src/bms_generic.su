@@ -1,0 +1,7 @@
+../Core/Analog_libs/src/bms_generic.c:225:10:Pec15_Calc	24	static
+../Core/Analog_libs/src/bms_generic.c:237:10:pec10_calc	32	static
+../Core/Analog_libs/src/bms_generic.c:267:6:spiSendCmd	24	static
+../Core/Analog_libs/src/bms_generic.c:282:6:spiSendCLRFLAG	32	static
+../Core/Analog_libs/src/bms_generic.c:298:6:spiReadData	48	static
+../Core/Analog_libs/src/bms_generic.c:339:6:spiWriteData	48	static
+../Core/Analog_libs/src/bms_generic.c:370:10:bmsPollAdc	32	static
