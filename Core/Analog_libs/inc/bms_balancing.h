@@ -10,8 +10,9 @@
  *   - Watchdog de hardware configurado via DCTO (máx. 5 min por segurança).
  *
  * Conformidade FSAE 2026:
- *   - EV.5.7: proteção contra sobretensão/subtensão mantida durante balanceamento.
- *   - T.9.1 : AMS deve monitorar cada célula individualmente.
+ *   - EV.7.3.3: balanceamento de célula não é permitido com o Shutdown
+ *     Circuit aberto (verificar isso no nível do chamador/programLoop).
+ *   - EV.7.4.1: BMS deve medir a tensão de cada célula individualmente.
  *
  * Referência: ADBMS6830B Datasheet Rev.0, Tabela 11 (CFGB), Seção "Cell Balancing"
  *
@@ -105,8 +106,8 @@ void bms_balancing_set_pwm_cell(ad68_pwma_t *pwma, ad68_pwmb_t *pwmb,
 
 /**
  * @brief Codifica tensão float em código de 12 bits para VUV/VOV do CFGB.
- *        Fórmula (datasheet Table 11):
- *          code = (V / (16 × 150e-6)) − 1
+ *        Fórmula (datasheet Table 103):
+ *          code = (V − 1.5) / (16 × 150e-6)
  *        Resultado clampado para [0, 0xFFF].
  */
 uint16_t bms_encode_vuv(float v_volts);

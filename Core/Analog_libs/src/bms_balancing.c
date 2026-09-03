@@ -65,27 +65,33 @@ void bms_balancing_set_pwm_ic(ad68_pwma_t *pwma, ad68_pwmb_t *pwmb, uint8_t duty
 }
 
 /* -----------------------------------------------------------------------
- * Codificação de limites VUV / VOV
- * Fórmula (datasheet Table 11):
- *   code12 = V / (16 × 150e-6) − 1
+ * @brief Codificação de limites VUV / VOV
+ * Fórmula (datasheet Table 103):
+ *   threshold_V = code12 × 16 × 150e-6 + 1.5
+ *   code12      = (threshold_V − 1.5) / (16 × 150e-6)
  * Resultado: inteiro 12-bit [0x000 – 0xFFF]
+ *
+ * CORRIGIDO (Mar 2026): fórmula anterior (V / (16×150e-6) − 1) estava
+ * invertida e não subtraía o offset de 1.5V do datasheet, gerando
+ * thresholds muito acima do valor configurado (ex.: 2.5V codificava
+ * para ~5.5V na prática) -- a proteção de UV em hardware nunca disparava.
  * ----------------------------------------------------------------------- */
 uint16_t bms_encode_vuv(float v_volts) {
-    int32_t code = (int32_t)(v_volts / (16.0f * 150e-6f)) - 1;
+    int32_t code = (int32_t)((v_volts - 1.5f) / (16.0f * 150e-6f));
     if (code < 0)      code = 0;
     if (code > 0xFFF)  code = 0xFFF;
     return (uint16_t)code;
 }
 
 uint16_t bms_encode_vov(float v_volts) {
-    int32_t code = (int32_t)(v_volts / (16.0f * 150e-6f)) - 1;
+    int32_t code = (int32_t)((v_volts - 1.5f) / (16.0f * 150e-6f));
     if (code < 0)      code = 0;
     if (code > 0xFFF)  code = 0xFFF;
     return (uint16_t)code;
 }
 
 /* -----------------------------------------------------------------------
- * Cálculo de estatísticas
+ * @brief Cálculo de estatísticas
  * ----------------------------------------------------------------------- */
 void bms_balancing_compute_stats(float volt[TOTAL_IC][TOTAL_CELL],
                                  bms_bal_state_t *state)
@@ -118,7 +124,7 @@ void bms_balancing_compute_stats(float volt[TOTAL_IC][TOTAL_CELL],
 }
 
 /* -----------------------------------------------------------------------
- * Determinação de células a descarregar
+ * @brief Determinação de células a descarregar
  * ----------------------------------------------------------------------- */
 void bms_balancing_update(float volt[TOTAL_IC][TOTAL_CELL],
                           bms_bal_state_t *state,
@@ -144,7 +150,7 @@ void bms_balancing_update(float volt[TOTAL_IC][TOTAL_CELL],
 }
 
 /* -----------------------------------------------------------------------
- * Escrita no hardware (CFGB + PWMA + PWMB)
+ * @brief Escrita no hardware (CFGB + PWMA + PWMB)
  * ----------------------------------------------------------------------- */
 void bms_balancing_apply(ad68_cfb_t cfb_Tx[TOTAL_IC],
                          ad68_pwma_t pwma[TOTAL_IC],
@@ -200,7 +206,7 @@ void bms_balancing_apply(ad68_cfb_t cfb_Tx[TOTAL_IC],
 }
 
 /* -----------------------------------------------------------------------
- * Para toda descarga
+ * @brief Para toda descarga
  * ----------------------------------------------------------------------- */
 void bms_balancing_stop_all(ad68_cfb_t cfb_Tx[TOTAL_IC],
                             ad68_pwma_t pwma[TOTAL_IC],
@@ -228,7 +234,7 @@ void bms_balancing_stop_all(ad68_cfb_t cfb_Tx[TOTAL_IC],
 }
 
 /* -----------------------------------------------------------------------
- * Task de alto nível
+ * @brief Task de alto nível
  * ----------------------------------------------------------------------- */
 bool bms_balancing_task(float volt[TOTAL_IC][TOTAL_CELL],
                         ad68_cfb_t cfb_Tx[TOTAL_IC],
