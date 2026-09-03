@@ -20,7 +20,8 @@
 #define UART_TIME_OUT   HAL_MAX_DELAY
 
 /* Handles de periféricos (definidos pelo CubeMX) -------------------------- */
-extern SPI_HandleTypeDef  hspi1;
+extern SPI_HandleTypeDef  hspi2;   /* CORRIGIDO: era hspi1, nunca inicializado.
+                                       main.c só chama MX_SPI2_Init() -> hspi2. */
 extern UART_HandleTypeDef hlpuart1;
 extern TIM_HandleTypeDef  htim2;
 
@@ -51,9 +52,15 @@ void delayMsActive(uint32_t ms);   /* delay mantendo IsoSPI ativo           */
 
 /* -----------------------------------------------------------------------
  * Funções SPI de baixo nível
+ * Retornam true em sucesso, false em erro/timeout HAL.
  * ----------------------------------------------------------------------- */
-void spiWriteBytes(uint16_t size, uint8_t *tx_data);
-void spiWriteReadBytes(uint8_t *tx_data, uint8_t *rx_data, uint16_t size);
-void spiReadBytes(uint16_t size, uint8_t *rx_data);
+bool spiWriteBytes(uint16_t size, uint8_t *tx_data);
+bool spiWriteReadBytes(uint8_t *tx_data, uint8_t *rx_data, uint16_t size);
+bool spiReadBytes(uint16_t size, uint8_t *rx_data);
+
+/* Timeout de proteção para bmsPollAdc (ms). Datasheet: maior tempo de
+ * conversão típico é bem menor que isso (ex.: redundante 8-16ms); usamos
+ * margem generosa para cobrir soak time configurável de AUX. */
+#define BMS_POLL_TIMEOUT_MS   100
 
 #endif /* ANALOG_LIBS_INC_MCU_WRAPPER_H_ */

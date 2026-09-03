@@ -3,12 +3,18 @@
  *
  * Descrição: Implementação da camada de abstração de hardware.
  *
- * CORREÇÕES em relação ao arquivo anterior:
+ * FIXs em relação ao arquivo anterior:
  *   1. '#define WAKEUP_DELAY 1;' → '#define WAKEUP_DELAY 1'  (semicolon no macro
  *      causava expansão inválida: 'HAL_Delay(1;)').
  *   2. 'adBmsWakeupIc' renomeado para 'bmsWakeupIc' (consistência com header).
  *   3. Adicionadas funções delayUs() e delayMsActive() (usadas por bms_safety.c).
  *   4. Macro GPIO_PORT/CS_PIN alinhados com pinout do main.h do projeto.
+ *   5. CORRIGIDO (Mar 2026): apontava para hspi1, que nunca era inicializado
+ *      (main.c só chama MX_SPI2_Init() -> hspi2; MX_SPI1_Init() de spi.c
+ *      nunca era chamada). Agora usa hspi2.
+ *   6. CORRIGIDO (Mar 2026): funções spiXxxBytes agora retornam bool/status
+ *      do HAL em vez de descartar o retorno -- permite detectar falha de
+ *      comunicação em vez de seguir com dados não confiáveis.
  *
  * Modificado em: Mar 2026
  * Autor: vtaua
@@ -19,14 +25,14 @@
 #include "main.h"
 
 /* -----------------------------------------------------------------------
- * Handles HAL (definidos pelo CubeMX em spi.c / tim.c)
+ * Handles HAL (definidos pelo CubeMX em main.c -- MX_SPI2_Init())
  * ----------------------------------------------------------------------- */
-static SPI_HandleTypeDef  *hspi  = &hspi1;
+static SPI_HandleTypeDef  *hspi  = &hspi2;
 static TIM_HandleTypeDef  *htim  = &htim2;
 
 /* -----------------------------------------------------------------------
  * Pino de Chip Select – alinhe com as definições do seu main.h
- * No projeto Manchester: BMS_CS_GPIO_Port / BMS_CS_Pin (PB6)
+ * Pinout real do projeto: BMS_CS_GPIO_Port / BMS_CS_Pin (PC0)
  * ----------------------------------------------------------------------- */
 #define GPIO_PORT   BMS_CS_GPIO_Port
 #define CS_PIN      BMS_CS_Pin
@@ -103,15 +109,15 @@ void delayMsActive(uint32_t ms) {
 /* -----------------------------------------------------------------------
  * Funções SPI de baixo nível
  * ----------------------------------------------------------------------- */
-void spiWriteBytes(uint16_t size, uint8_t *tx_data) {
-    HAL_SPI_Transmit(hspi, tx_data, size, SPI_TIME_OUT);
+bool spiWriteBytes(uint16_t size, uint8_t *tx_data) {
+    return HAL_SPI_Transmit(hspi, tx_data, size, SPI_TIME_OUT) == HAL_OK;
 }
 
-void spiWriteReadBytes(uint8_t *tx_data, uint8_t *rx_data, uint16_t size) {
-    HAL_SPI_Transmit(hspi, tx_data, 4, SPI_TIME_OUT);
-    HAL_SPI_Receive(hspi, rx_data, size, SPI_TIME_OUT);
+bool spiWriteReadBytes(uint8_t *tx_data, uint8_t *rx_data, uint16_t size) {
+    if (HAL_SPI_Transmit(hspi, tx_data, 4, SPI_TIME_OUT) != HAL_OK) return false;
+    return HAL_SPI_Receive(hspi, rx_data, size, SPI_TIME_OUT) == HAL_OK;
 }
 
-void spiReadBytes(uint16_t size, uint8_t *rx_data) {
-    HAL_SPI_Receive(hspi, rx_data, size, SPI_TIME_OUT);
+bool spiReadBytes(uint16_t size, uint8_t *rx_data) {
+    return HAL_SPI_Receive(hspi, rx_data, size, SPI_TIME_OUT) == HAL_OK;
 }
