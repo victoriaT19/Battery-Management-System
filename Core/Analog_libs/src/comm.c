@@ -18,7 +18,7 @@
  *
  * Referência: bms_libWrapper.c do repo Manchester Stinger (Nov 2024 – amrlxyz)
  *
- * Modificado em: Mar 2026
+ * Modificado em: jun 2026
  * Autor: vtaua
  */
 
@@ -34,7 +34,7 @@
 #include <string.h>
 
 /* -----------------------------------------------------------------------
- * Struct principal de dados do BMS
+ * @brief Struct principal de dados do BMS
  * ----------------------------------------------------------------------- */
 typedef struct {
     /* Registradores de configuração (Tx = o que enviamos, Rx = o que lemos) */
@@ -58,9 +58,7 @@ typedef struct {
 
     /* Temperatura */
     float volt_seg  [TOTAL_IC];
-    float temp_cell [TOTAL_IC][TOTAL_CELL];   /* °C */
-    float temp_ic   [TOTAL_IC];               /* Die temperature °C */
-    float v_aux     [TOTAL_IC][TOTAL_CELL];   /* Tensão bruta AUX (NTC) */
+    float temp_ic   [TOTAL_IC];               /* Die temperature °C (ITMP) */
 
     /* Status de descarga */
     uint16_t isDischarging      [TOTAL_IC];
@@ -72,7 +70,7 @@ typedef struct {
 static adbms68_t bms;
 
 /* -----------------------------------------------------------------------
- * Buffers SPI temporários (reusados a cada operação)
+ * @brief Buffers SPI temporários (reusados a cada operação)
  * ----------------------------------------------------------------------- */
 static uint8_t  txData[TOTAL_IC][TX_DATA];
 static uint8_t  rxData[TOTAL_IC][RX_DATA];
@@ -80,7 +78,7 @@ static uint8_t  rxPecErr[TOTAL_IC];
 static uint8_t  rxCmdCnt[TOTAL_IC];
 
 /* -----------------------------------------------------------------------
- * Estado de falha e controle
+ * @brief Estado de falha e controle
  * ----------------------------------------------------------------------- */
 static BMS_StatusTypeDef  g_statusFlags   = BMS_ERR_COMMS;
 static bool               g_balancingEnabled  = false;
@@ -94,7 +92,7 @@ static const VoltageTypes DISCHARGE_VOLT_TYPE = VOLTAGE_S;
 static float g_balDelta = BAL_DELTA_DEFAULT_V;
 
 /* -----------------------------------------------------------------------
- * Helpers internos
+ * @brief Helpers internos
  * ----------------------------------------------------------------------- */
 
 /** Escreve registrador de configuração ou PWM para toda a cadeia */
@@ -128,7 +126,7 @@ static void writeRegister(RegisterTypes regType) {
     spiWriteData(TOTAL_IC, cmd, (uint8_t *)txData);
 }
 
-/** Verifica PEC e retorna true se algum IC tem erro */
+/** @brief Verifica PEC e retorna true se algum IC tem erro */
 static bool checkPecFault(void) {
     for (int ic = 0; ic < TOTAL_IC; ic++) {
         if (rxPecErr[ic]) return true;
@@ -136,7 +134,7 @@ static bool checkPecFault(void) {
     return false;
 }
 
-/** Calcula estatísticas min/max/avg/delta por IC e globais */
+/** @brief Calcula estatísticas min/max/avg/delta por IC e globais */
 static void calculateStats(VoltageTypes vtype) {
     for (int ic = 0; ic < TOTAL_IC; ic++) {
         float sum =  0.0f;
@@ -163,7 +161,7 @@ static void calculateStats(VoltageTypes vtype) {
 }
 
 /* -----------------------------------------------------------------------
- * Valor padrão dos registradores após reset
+ * @brief Valor padrão dos registradores após reset
  * Obtido de leitura RDCFG após SRST (conforme Manchester repo bms_resetConfig)
  * ----------------------------------------------------------------------- */
 static void resetConfig(void) {
@@ -181,7 +179,7 @@ static void resetConfig(void) {
 }
 
 /* -----------------------------------------------------------------------
- * Inicialização
+ * @brief Inicialização
  * ----------------------------------------------------------------------- */
 BMS_StatusTypeDef bms_init(void) {
     memset(&bms,         0, sizeof(bms));
@@ -227,7 +225,7 @@ BMS_StatusTypeDef bms_init(void) {
 }
 
 /* -----------------------------------------------------------------------
- * Configuração de GPO4/5 (mux de temperatura, igual ao Manchester repo)
+ * @brief Configuração de GPO4/5 (mux de temperatura, igual ao Manchester repo)
  * ----------------------------------------------------------------------- */
 void bms_setGpo45(uint8_t twoBitIndex) {
     for (int ic = 0; ic < TOTAL_IC; ic++) {
@@ -238,7 +236,7 @@ void bms_setGpo45(uint8_t twoBitIndex) {
 }
 
 /* -----------------------------------------------------------------------
- * Inicia C-ADC contínuo
+ * @brief Inicia C-ADC contínuo
  * ----------------------------------------------------------------------- */
 void bms_startAdcvCont(bool enableRedundant) {
     ADCV.cont = 1;
@@ -250,7 +248,7 @@ void bms_startAdcvCont(bool enableRedundant) {
 }
 
 /* -----------------------------------------------------------------------
- * Leitura de tensão de célula (parse 3 células por grupo, 6 grupos)
+ * @brief Leitura de tensão de célula (parse 3 células por grupo, 6 grupos)
  * ----------------------------------------------------------------------- */
 static void parseVoltage(uint8_t raw[TOTAL_IC][RX_DATA],
                          float   vArr[TOTAL_IC][TOTAL_CELL],
@@ -295,12 +293,14 @@ static void initCmdTable(void) {
 
 BMS_StatusTypeDef readCellVoltage(VoltageTypes voltTypes) {
     static bool tableInit = false;
-    if (!tableInit) { initCmdTable(); tableInit = true; }
+    if (!tableInit) {
+    	initCmdTable();
+    	tableInit = true;
+    }
 
     for (int i = 0; i < 6; i++) {
         if (!rdCmdTable[voltTypes][i]) continue;
-        spiReadData(TOTAL_IC, rdCmdTable[voltTypes][i],
-                    (uint8_t *)rxData, rxPecErr, rxCmdCnt, RX_DATA);
+        spiReadData(TOTAL_IC, rdCmdTable[voltTypes][i], (uint8_t *)rxData, rxPecErr, rxCmdCnt, RX_DATA);
         if (checkPecFault()) {
             g_statusFlags |= BMS_ERR_COMMS;
             return BMS_ERR_COMMS;
@@ -313,7 +313,7 @@ BMS_StatusTypeDef readCellVoltage(VoltageTypes voltTypes) {
 }
 
 /* -----------------------------------------------------------------------
- * Leitura de registrador para depuração
+ * @brief Leitura de registrador para depuração
  * ----------------------------------------------------------------------- */
 BMS_StatusTypeDef readRegister(RegisterTypes regTypes) {
     uint8_t *cmd;
@@ -331,63 +331,39 @@ BMS_StatusTypeDef readRegister(RegisterTypes regTypes) {
 }
 
 /* -----------------------------------------------------------------------
- * Medição auxiliar (NTC via GPIO)
- * Sequência Manchester: ADAX → PLAUX1 → lê mux1 → troca GPO → ADAX → lê mux0
+ * @brief Medição auxiliar – temperatura interna do die (ITMP)
+ *
+ * O acumulador usa um TMS dedicado para temperatura de célula (NTCs nas
+ * células não passam pelo ADBMS6830B). O que este IC mede aqui é a
+ * temperatura interna do próprio die (ITMP), útil como diagnóstico de
+ * saúde do chip (datasheet: thermal shutdown trip em ~150°C), NÃO a
+ * temperatura das células.
+ *
+ * Sequência: ADAX(CH=ITMP) → poll PLAUX → lê RDSTATA (STAR2/STAR3 = ITMP).
  * ----------------------------------------------------------------------- */
 BMS_StatusTypeDef auxMeasurement(void) {
     ADAX.ow  = 0;
-    ADAX.ch  = 0x00;  /* todos os canais */
-    ADAX.ch4 = 0;
     ADAX.pup = 0;
+    ADAX.ch4 = 1;     /* CH[4:0] = 10111 = ITMP (datasheet Table 24) */
+    ADAX.ch  = 0x07;  /* CH[3:0] = 0111                              */
 
-    /* Mux canal 1 */
     spiSendCmd((uint8_t *)&ADAX);
-    bmsPollAdc(PLAUX1);
+    if (bmsPollAdc(PLAUX) == UINT32_MAX) return BMS_ERR_COMMS;
 
-    spiReadData(TOTAL_IC, RDAUXA, (uint8_t *)rxData, rxPecErr, rxCmdCnt, RX_DATA);
+    spiReadData(TOTAL_IC, RDSTATA, (uint8_t *)rxData, rxPecErr, rxCmdCnt, RX_DATA);
     if (checkPecFault()) return BMS_ERR_COMMS;
 
+    /* RDSTATA: STAR0/1=VREF2, STAR2/3=ITMP (datasheet Table 89) */
     for (int ic = 0; ic < TOTAL_IC; ic++) {
-        for (int j = 0; j < 3 && j < TOTAL_CELL/2; j++) {
-            int16_t raw = (int16_t)((rxData[ic][j*2+1] << 8) | rxData[ic][j*2]);
-            bms.v_aux[ic][j*2 + 1] = AUX_VOLTAGE_V(raw);
-        }
-    }
-
-    /* Mux canal 0 */
-    bms_setGpo45(0x00);
-    delayMsActive(1);
-
-    spiSendCmd((uint8_t *)&ADAX);
-    bmsPollAdc(PLAUX1);
-
-    spiReadData(TOTAL_IC, RDAUXA, (uint8_t *)rxData, rxPecErr, rxCmdCnt, RX_DATA);
-    if (checkPecFault()) {
-        bms_setGpo45(0x03);  /* restaura GPO */
-        return BMS_ERR_COMMS;
-    }
-
-    for (int ic = 0; ic < TOTAL_IC; ic++) {
-        for (int j = 0; j < 3 && j < TOTAL_CELL/2; j++) {
-            int16_t raw = (int16_t)((rxData[ic][j*2+1] << 8) | rxData[ic][j*2]);
-            bms.v_aux[ic][j*2] = AUX_VOLTAGE_V(raw);
-        }
-    }
-
-    bms_setGpo45(0x03);  /* restaura GPO */
-
-    /* Converte tensão AUX → temperatura °C */
-    for (int ic = 0; ic < TOTAL_IC; ic++) {
-        for (int c = 0; c < TOTAL_CELL; c++) {
-            bms.temp_cell[ic][c] = bms_safety_aux_to_celsius(bms.v_aux[ic][c]);
-        }
+        int16_t raw = (int16_t)((rxData[ic][3] << 8) | rxData[ic][2]);
+        bms.temp_ic[ic] = ITMP_TO_CELSIUS(raw);
     }
 
     return BMS_OK;
 }
 
 /* -----------------------------------------------------------------------
- * Balanceamento / Descarga
+ * @brief Balanceamento / Descarga
  * ----------------------------------------------------------------------- */
 
 /** Cálculo e início de descarga proporcional */
@@ -429,7 +405,7 @@ void startBalancing(float delta_v) {
 }
 
 /* -----------------------------------------------------------------------
- * Verificações de status
+ * @brief Verificações de status
  * ----------------------------------------------------------------------- */
 BMS_StatusTypeDef checkVoltage(void) {
     return bms_safety_check_voltage(
@@ -437,14 +413,14 @@ BMS_StatusTypeDef checkVoltage(void) {
 }
 
 BMS_StatusTypeDef checkTemp(void) {
-    return bms_safety_check_temperature(bms.v_aux, &g_safetyState);
+    return bms_safety_check_die_temperature(bms.temp_ic, &g_safetyState);
 }
 
 BMS_StatusTypeDef checkCur(void)       { return BMS_OK; /* TODO: shunt ADC */ }
 BMS_StatusTypeDef checkCommsFault(void) { return (g_statusFlags & BMS_ERR_COMMS); }
 
 /* -----------------------------------------------------------------------
- * Reset suave
+ * @brief Reset suave
  * ----------------------------------------------------------------------- */
 void bms_reset(void) {
     stopDischarge();
@@ -455,7 +431,7 @@ void bms_reset(void) {
 }
 
 /* -----------------------------------------------------------------------
- * Loop principal
+ * @brief Loop principal
  * ----------------------------------------------------------------------- */
 BMS_StatusTypeDef programLoop(void) {
     static uint32_t owCheckTick = 0;
@@ -494,24 +470,33 @@ BMS_StatusTypeDef programLoop(void) {
     uint32_t now = HAL_GetTick();
     if (now - owCheckTick > OW_CHECK_INTERVAL_MS) {
         owCheckTick = now;
-        /* TODO: implementar sequência real PUP/PDOWN */
-        bms_safety_check_open_wire(bms.volt_cell[DISCHARGE_VOLT_TYPE],
-                                   bms.volt_cell[DISCHARGE_VOLT_TYPE],
-                                   &g_safetyState);
+        /* Sequência real MUTE → ADCV(pares)/ADCV(ímpares) → UNMUTE →
+         * compara, encapsulada em bms_safety_task() (ver bms_safety.c).
+         * Tensão/temperatura já foram verificadas acima nos passos 2-3;
+         * aqui só nos interessa o efeito colateral do open-wire check. */
+        bms_safety_task(bms.volt_cell[DISCHARGE_VOLT_TYPE], bms.temp_ic,
+                         /*check_ow=*/true, &g_safetyState);
     }
 
     /* 5. Balanceamento (se habilitado e sem falhas) */
     g_statusFlags = BMS_OK;
-    if (g_balancingEnabled) {
+    /* EV.7.3.3: balanceamento não é permitido com o Shutdown Circuit
+     * aberto. Trava explícita aqui, independente da ordem dos checks
+     * acima -- não confiar apenas nos early-returns. */
+    if (g_balancingEnabled && g_safetyState.fault_mask == BMS_FAULT_NONE) {
         bmsWakeupIc(TOTAL_IC);
         startBalancing(g_balDelta);
+    } else if (g_balancingEnabled) {
+        /* Falha ativa: garante que nenhuma descarga continue armada,
+         * mesmo que um ciclo anterior tenha deixado DCC/PWM configurados. */
+        stopDischarge();
     }
 
     return BMS_OK;
 }
 
 /* -----------------------------------------------------------------------
- * Controle de carga / balanceamento
+ * @brief Controle de carga / balanceamento
  * ----------------------------------------------------------------------- */
 void BMS_EnableBalancing(bool enabled) { g_balancingEnabled = enabled; }
 void BMS_ToggleBalancing(void)         { g_balancingEnabled = !g_balancingEnabled; }
@@ -534,7 +519,7 @@ void BMS_WriteFaultSignal(bool state) {
 }
 
 /* -----------------------------------------------------------------------
- * CAN – prepara buffer de mensagens (estrutura da Manchester)
+ * @brief CAN – prepara buffer de mensagens
  * ----------------------------------------------------------------------- */
 #define BASE_CAN_ID  0xB000
 #define CAN_BUF_LEN  (TOTAL_IC * TOTAL_CELL + TOTAL_IC + 4)
@@ -559,7 +544,9 @@ void BMS_GetCanData(CanTxMsg **buff, uint32_t *len) {
         for (int c = 0; c < TOTAL_CELL; c++) {
             int16_t v    = (int16_t)(bms.volt_cell[DISCHARGE_VOLT_TYPE][ic][c] * 1000.0f);
             int16_t dif  = (int16_t)(bms.volt_cell_dif[DISCHARGE_VOLT_TYPE][ic][c] * 1000.0f);
-            int16_t temp = (int16_t)(bms.temp_cell[ic][c] * 100.0f);
+            /* TODO: integrar temperatura de célula vinda do TMS dedicado
+             * (não passa pelo ADBMS6830B). Por ora, campo zerado. */
+            int16_t temp = 0;
             uint8_t flags = (uint8_t)(
                 ((BIT_CHECK(bms.isDischarging[ic], c) ? 1 : 0) << 0) |
                 ((BIT_CHECK(bms.isCellFaultDetect[ic], c) ? 1 : 0) << 1));

@@ -5,15 +5,15 @@
  *
  * CORREÇÕES em relação ao arquivo anterior:
  *   1. Typedef duplicado 'pwma_t' → renomeado segundo typedef para 'ad68_pwmb_t'
- *      e primeiro para 'ad68_pwma_t' (alinhamento com Manchester repo).
+ *      e primeiro para 'ad68_pwma_t'.
  *   2. Membros de struct sem ';' em sta_, stb_, stc_ → corrigidos.
  *   3. Tipedefs anônimos de cfga/cfgb → adicionados nomes: ad68_cfa_t / ad68_cfb_t.
  *   4. Macros de conversão de tensão / temperatura adicionadas.
- *   5. Struct 'adcv_t' reescrita para alinhar com datasheet e Manchester (ADCV_t).
+ *   5. Struct 'adcv_t' reescrita para alinhar com datasheet (ADCV_t).
  *   6. Defines de limites de segurança (FSAE 2026 + datasheet).
  *
  * Referências:
- *   - ADBMS6830B Datasheet Rev.0, Table 11 (CFGB), Table 13 (ADCV)
+ *   - ADBMS6830B Datasheet Rev.0, Table 56 (CFGB), Table 18 (ADCV)
  *   - FSAE Rules 2026 EV.5.7, T.9.1
  *
  * Modificado em: Mar 2026
@@ -57,15 +57,20 @@
  * Limites de segurança (FSAE 2026 + Li-Ion típico)
  * Ajuste conforme especificação das células do acumulador.
  * ----------------------------------------------------------------------- */
-#define BMS_OV_THRESHOLD_V      4.20f   /* Sobretensão (EV.5.7)            */
-#define BMS_UV_THRESHOLD_V      2.50f   /* Subtensão   (EV.5.7)            */
-#define BMS_TEMP_MAX_C          60.0f   /* Temperatura máxima (°C) T.9.1   */
-#define BMS_TEMP_MIN_C         (-20.0f) /* Temperatura mínima (°C)         */
+#define BMS_OV_THRESHOLD_V      4.20f   /* Sobretensão (datasheet/célula)    */
+#define BMS_UV_THRESHOLD_V      2.50f   /* Subtensão   (datasheet/célula)    */
+/* Temperatura de CÉLULA é monitorada pelo TMS dedicado, fora deste IC.
+ * Os limites abaixo são para o DIE do ADBMS6830B (auto-diagnóstico do
+ * próprio chip), não para a bateria. Datasheet: faixa operacional
+ * TJ = -40°C a +125°C; thermal shutdown trip ~150°C (seção
+ * "Thermal Shutdown"). Margem de alerta antes do trip. */
+#define BMS_DIE_TEMP_MAX_C      125.0f  /* Alerta de temp. de die (°C)      */
+#define BMS_DIE_TEMP_MIN_C     (-40.0f) /* Faixa operacional mínima (°C)    */
 #define BMS_BALANCE_DELTA_V     0.010f  /* Delta para início do balanceamento */
 #define BMS_OW_DELTA_V          0.200f  /* Delta mínimo para detecção de OW  */
 
 /* -----------------------------------------------------------------------
- * Registrador de Configuração A – ADBMS6830B Table 9
+ * Registrador de Configuração A – ADBMS6830B Table 55
  * ----------------------------------------------------------------------- */
 typedef struct
 {
@@ -93,7 +98,7 @@ typedef struct
 } ad68_cfa_t;
 
 /* -----------------------------------------------------------------------
- * Registrador de Configuração B – ADBMS6830B Table 11
+ * Registrador de Configuração B – ADBMS6830B Table 56
  * Layout dos 6 bytes:
  *   [0] VUV[7:0]
  *   [1] VUV[11:8] | VOV[3:0]
@@ -120,7 +125,7 @@ typedef struct
 } ad68_cfb_t;
 
 /* -----------------------------------------------------------------------
- * Registradores PWM – ADBMS6830B Table 14/15
+ * Registradores PWM – ADBMS6830B Table 95/96
  * WRPWM1: células 1-12 (4 bits cada, 0x0=0%, 0xF=100%)
  * WRPWM2: células 13-16 (restante do 2º registrador reservado)
  * ----------------------------------------------------------------------- */
@@ -176,7 +181,7 @@ typedef struct {
 } ad68_stc_t;
 
 /* -----------------------------------------------------------------------
- * Comando ADCV – ADBMS6830B Table 13
+ * Comando ADCV – ADBMS6830B Table 50
  * Byte 0 (enviado como MSB primeiro):
  *   [7]   RD    – redundant measurement
  *   [6:5] RES   = 0b01 (fixo)
