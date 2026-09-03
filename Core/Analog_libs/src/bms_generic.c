@@ -12,7 +12,7 @@
  *
  * Referência: ADBMS6830B Datasheet Rev.0, Tables 5, 13.
  *
- * Modificado em: Mar 2026
+ * Modificado em: jun 2026
  * Autor: vtaua
  */
 
@@ -24,7 +24,7 @@
 #include "../inc/bms_generic.h"
 
 /* -----------------------------------------------------------------------
- * Tabela de comandos – definições (declaradas extern em bms_cmd.h)
+ * @brief Tabela de comandos – definições (declaradas extern em bms_cmd.h)
  * ----------------------------------------------------------------------- */
 uint8_t WRCFGA[2]     = { 0x00, 0x01 };
 uint8_t RDCFGA[2]     = { 0x00, 0x02 };
@@ -82,7 +82,6 @@ uint8_t RDSTATCERR[2] = { 0x00, 0x72 };
 uint8_t RDSTATD[2]    = { 0x00, 0x33 };
 uint8_t RDSTATE[2]    = { 0x00, 0x34 };
 
-/* WRPWMA/WRPWMB: nomes alinhados com Manchester repo e datasheet ADI */
 uint8_t WRPWMA[2]     = { 0x00, 0x20 };
 uint8_t RDPWMA[2]     = { 0x00, 0x22 };
 uint8_t WRPWMB[2]     = { 0x00, 0x21 };
@@ -96,13 +95,11 @@ uint8_t CLRFC[2]      = { 0x07, 0x14 };
 uint8_t CLOVUV[2]     = { 0x07, 0x15 };
 
 uint8_t PLADC[2]      = { 0x07, 0x18 };
-uint8_t PLAUT[2]      = { 0x07, 0x19 };
 uint8_t PLCADC[2]     = { 0x07, 0x1C };
 uint8_t PLSADC[2]     = { 0x07, 0x1D };
-uint8_t PLAUX1[2]     = { 0x07, 0x1E };
+uint8_t PLAUX[2]      = { 0x07, 0x1E };   /* nome único, sem duplicata PLAUX1/PLAUT */
 uint8_t PLAUX2[2]     = { 0x07, 0x1F };
 
-uint8_t DIAGN[2]      = { 0x07, 0x15 };
 uint8_t WRCOMM[2]     = { 0x07, 0x21 };
 uint8_t RDCOMM[2]     = { 0x07, 0x22 };
 uint8_t STCOMM[13]    = { 0x07, 0x23, 0xB9, 0xE4,
@@ -118,7 +115,7 @@ uint8_t SRST[2]       = { 0x00, 0x27 };
 uint8_t RDSID[2]      = { 0x00, 0x2C };
 
 /* -----------------------------------------------------------------------
- * Instâncias dos comandos de ADC com valores padrão
+ * @brief Instâncias dos comandos de ADC com valores padrão
  * Valores alinhados com bms_cmdlist.c do repositório Manchester (Tab. 13)
  * ----------------------------------------------------------------------- */
 const adcv_t ADCV_default = {
@@ -163,7 +160,7 @@ const adax2_t ADAX2_default = { .ch4=0x00, .res=0x000, .x=0x00 };
 adax2_t ADAX2 = { .ch4=0x00, .res=0x000, .x=0x00 };
 
 /* -----------------------------------------------------------------------
- * Tabelas CRC
+ * @brief Tabelas CRC
  * ----------------------------------------------------------------------- */
 static const uint16_t Crc15Table[256] = {
     0x0000, 0xc599, 0xceab, 0x0b32, 0xd8cf, 0x1d56, 0x1664, 0xd3fd,
@@ -220,7 +217,7 @@ static const uint16_t crc10Table[256] = {
 };
 
 /* -----------------------------------------------------------------------
- * Implementação PEC15
+ * @brief Implementação PEC15
  * ----------------------------------------------------------------------- */
 uint16_t Pec15_Calc(uint8_t len, uint8_t *data) {
     uint16_t remainder = 16;
@@ -232,7 +229,7 @@ uint16_t Pec15_Calc(uint8_t len, uint8_t *data) {
 }
 
 /* -----------------------------------------------------------------------
- * Implementação PEC10
+ * @brief Implementação PEC10
  * ----------------------------------------------------------------------- */
 uint16_t pec10_calc(bool rx_cmd, int len, uint8_t *data) {
     uint16_t remainder = 16;
@@ -262,7 +259,7 @@ uint16_t pec10_calc(bool rx_cmd, int len, uint8_t *data) {
 }
 
 /* -----------------------------------------------------------------------
- * Envio de comando (2 bytes + PEC15 = 4 bytes)
+ * @brief Envio de comando (2 bytes + PEC15 = 4 bytes)
  * ----------------------------------------------------------------------- */
 void spiSendCmd(uint8_t tx_cmd[2]) {
     uint8_t cmd[4];
@@ -277,7 +274,7 @@ void spiSendCmd(uint8_t tx_cmd[2]) {
 }
 
 /* -----------------------------------------------------------------------
- * Envio de CLRFLAG com 6 bytes de dados de registrador
+ * @brief Envio de CLRFLAG com 6 bytes de dados de registrador
  * ----------------------------------------------------------------------- */
 void spiSendCLRFLAG(uint8_t tx_cmd[2], uint8_t st_reg[6]) {
     uint8_t cmd[10];
@@ -293,7 +290,7 @@ void spiSendCLRFLAG(uint8_t tx_cmd[2], uint8_t st_reg[6]) {
 }
 
 /* -----------------------------------------------------------------------
- * Leitura de dados de todos os ICs
+ * @brief Leitura de dados de todos os ICs
  * ----------------------------------------------------------------------- */
 void spiReadData(uint8_t tIC, uint8_t tx_cmd[2],
                  uint8_t *rx_data, uint8_t *pec_error,
@@ -334,7 +331,7 @@ void spiReadData(uint8_t tIC, uint8_t tx_cmd[2],
 }
 
 /* -----------------------------------------------------------------------
- * Escrita de dados em todos os ICs (daisy-chain, último IC recebe primeiro)
+ * @brief Escrita de dados em todos os ICs (daisy-chain, último IC recebe primeiro)
  * ----------------------------------------------------------------------- */
 void spiWriteData(uint8_t tIC, uint8_t tx_cmd[2], uint8_t *data) {
     uint8_t CMD_LEN = 4 + (RX_DATA * tIC);
@@ -365,7 +362,7 @@ void spiWriteData(uint8_t tIC, uint8_t tx_cmd[2], uint8_t *data) {
 }
 
 /* -----------------------------------------------------------------------
- * Poll ADC – aguarda EOC (SDO = 0xFF)
+ * @brief Poll ADC – aguarda EOC (SDO = 0xFF)
  * ----------------------------------------------------------------------- */
 uint32_t bmsPollAdc(uint8_t tx_cmd[2]) {
     uint8_t cmd[4];

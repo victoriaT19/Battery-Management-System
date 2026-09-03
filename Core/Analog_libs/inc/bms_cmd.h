@@ -8,10 +8,16 @@
  *   2. Renomeados WRPWM1/WRPWM2 para WRPWMA/WRPWMB (padrão Manchester repo
  *      e documentação Analog Devices).
  *   3. Adicionado guarda de inclusão múltipla correto.
- *   4. Comando DIAGN corrigido (0x07,0x15 → conflita com CLOVUV; mantido como
- *      está no Manchester repo: 0x07,0x15 para DIAGN conforme datasheet p.43).
+ *   4. Comando DIAGN REMOVIDO (Mar 2026): o ADBMS6830B (Rev.0) não possui
+ *      comando DIAGN -- era um comando de família LTC68xx mais antiga,
+ *      ausente da Table 50 deste datasheet. O valor {0x07,0x15} usado
+ *      antes colidia byte-a-byte com CLOVUV, fazendo os dois comandos
+ *      mapearem para a mesma sequência SPI.
+ *   5. PLAUT/PLAUX1 (duplicatas/nomes confusos do mesmo valor 0x07,0x1E)
+ *      consolidados em um único PLAUX, conforme nome do comando no
+ *      datasheet (Table 50: "Poll AUX ADC").
  *
- * Referência: ADBMS6830B Datasheet Rev.0, Table 5 (Command Summary)
+ * Referência: ADBMS6830B Datasheet Rev.0, Table 50 (Command Summary)
  *
  * Modificado em: Mar 2026
  * Autor: vtaua
@@ -123,16 +129,14 @@ extern uint8_t CLOVUV[2];
  * Comandos de Poll ADC
  * ----------------------------------------------------------------------- */
 extern uint8_t PLADC[2];
-extern uint8_t PLAUT[2];
 extern uint8_t PLCADC[2];
 extern uint8_t PLSADC[2];
-extern uint8_t PLAUX1[2];
+extern uint8_t PLAUX[2];
 extern uint8_t PLAUX2[2];
 
 /* -----------------------------------------------------------------------
- * Diagnóstico / comunicação I2C
+ * Comunicação I2C/SPI master via GPIO
  * ----------------------------------------------------------------------- */
-extern uint8_t DIAGN[2];
 extern uint8_t WRCOMM[2];
 extern uint8_t RDCOMM[2];
 extern uint8_t STCOMM[13];
