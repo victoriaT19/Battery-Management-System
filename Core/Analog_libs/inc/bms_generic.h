@@ -64,7 +64,9 @@ void spiWriteData(uint8_t tIC, uint8_t tx_cmd[2], uint8_t *data);
 
 /**
  * @brief Envia comando de Poll ADC e aguarda conversão.
- * @return Contagem do timer (microsegundos) até conclusão
+ * @return Contagem do timer (microsegundos) até conclusão, ou UINT32_MAX
+ *         se estourou BMS_POLL_TIMEOUT_MS sem SDO ir para nível alto
+ *         (indica IC travado, desconectado, ou falha de comunicação).
  */
 uint32_t bmsPollAdc(uint8_t tx_cmd[2]);
 
