@@ -1,21 +1,29 @@
 /*
  * bms_safety.h
  *
- * Descrição: Módulo de segurança (PROTÓTIPO) para o ADBMS6830B.
+ * Descrição: Módulo de segurança para o ADBMS6830B.
  *            Implementa verificações de:
  *              - Sobretensão / Subtensão (SW check + HW flags)
- *              - Sobretemperatura (NTC via AUX ADC)
- *              - Fio aberto / Open Wire (método PUP/PDOWN)
+ *              - Sobretemperatura do DIE do IC (auto-diagnóstico interno;
+ *                temperatura de CÉLULA é responsabilidade do TMS dedicado
+ *                do acumulador, fora deste módulo)
+ *              - Fio aberto / Open Wire (método canais pares/ímpares)
  *
- * STATUS: PROTÓTIPO – funções marcadas com [TODO] requerem implementação
- *         completa da leitura SPI de registradores de status.
+ * Conformidade FSAE 2026 (verificado contra FSAE_Rules_2026_V1.pdf):
+ *   - EV.7.3.4 : BMS deve monitorar OV/UV/temp/comms/falha interna.
+ *   - EV.7.3.5 : Ao detectar falha, BMS deve abrir o Shutdown Circuit
+ *                (EV.7.2.2) e acender o BMS Indicator Light.
+ *   - EV.7.4.2 : Limites de tensão de célula vêm do datasheet da célula
+ *                (BMS_OV_THRESHOLD_V / BMS_UV_THRESHOLD_V devem refletir
+ *                isso, não um valor genérico).
+ *   NOTA: EV.5.7 é o item "Voltage Indicator" (lâmpada HV hardwired) e
+ *   T.9.1 é a seção de Definições -- nenhum dos dois define um tempo de
+ *   resposta numérico para OV/UV. Não há requisito explícito de "500 ms"
+ *   no texto da regra 2026 V1.0; confirme contra o ESF do time se esse
+ *   número vem de outra fonte (ano anterior, regra interna, etc.).
  *
- * Conformidade FSAE 2026:
- *   - EV.5.7.1 : OV/UV detectados dentro de 500 ms (verificação periódica).
- *   - T.9.1    : AMS deve abrir AIRs em caso de falha.
- *   - EV.5.5   : Temperatura máxima de operação das células.
- *
- * Referência: ADBMS6830B Datasheet Rev.0, seções Status Registers, Open Wire.
+ * Referência: ADBMS6830B Datasheet Rev.0, seções Status Registers, Open Wire,
+ *             Thermal Shutdown, GPIO and Device Parameter Measurements (ITMP).
  *
  * Criado em: Mar 2026
  * Autor: vtaua
@@ -27,38 +35,31 @@
 #include "common.h"
 #include "bms_data.h"
 
-/* -----------------------------------------------------------------------
- * Parâmetros NTC (ajustar conforme BOM do acumulador)
- * Equação Beta: T = 1 / (ln(R/R0)/B + 1/T0) − 273.15
- * ----------------------------------------------------------------------- */
-#define NTC_BETA          3950.0f   /* Constante Beta do termistor NTC      */
-#define NTC_R0            10000.0f  /* Resistência nominal a T0 (Ω)         */
-#define NTC_T0_KELVIN     298.15f   /* T0 = 25 °C em Kelvin                 */
-#define NTC_PULLUP_R      10000.0f  /* Resistor de pull-up (Ω)              */
-#define NTC_VREF          3.0f      /* Tensão de referência do divisor (V)  */
+/* Sem NTC neste IC -- temperatura de célula é responsabilidade do TMS
+ * dedicado do acumulador. Bloco de parâmetros NTC removido. */
 
 /* -----------------------------------------------------------------------
  * Bitmask de falhas
  * ----------------------------------------------------------------------- */
 typedef enum {
-    BMS_FAULT_NONE       = 0x00,
-    BMS_FAULT_OV         = 0x01,   /* Sobretensão                          */
-    BMS_FAULT_UV         = 0x02,   /* Subtensão                            */
-    BMS_FAULT_OVERTEMP   = 0x04,   /* Sobretemperatura                     */
-    BMS_FAULT_OPEN_WIRE  = 0x08,   /* Fio aberto                           */
-    BMS_FAULT_COMMS      = 0x10,   /* Falha de comunicação                 */
+    BMS_FAULT_NONE         = 0x00,
+    BMS_FAULT_OV           = 0x01,   /* Sobretensão                        */
+    BMS_FAULT_UV           = 0x02,   /* Subtensão                          */
+    BMS_FAULT_DIE_OVERTEMP = 0x04,   /* Sobretemperatura do DIE do IC      */
+    BMS_FAULT_OPEN_WIRE    = 0x08,   /* Fio aberto                         */
+    BMS_FAULT_COMMS        = 0x10,   /* Falha de comunicação               */
 } bms_fault_t;
 
 /* -----------------------------------------------------------------------
  * Estado de falha global
  * ----------------------------------------------------------------------- */
 typedef struct {
-    uint32_t fault_mask;                          /* Bitmask de falhas ativas */
+    uint32_t fault_mask;                          /* Bitmask de falhas ativas (bms_fault_t) */
     bool     ov_cell[TOTAL_IC][TOTAL_CELL];        /* Célula em OV             */
     bool     uv_cell[TOTAL_IC][TOTAL_CELL];        /* Célula em UV             */
-    bool     ot_cell[TOTAL_IC][TOTAL_CELL];        /* Célula em OT             */
+    bool     die_ot[TOTAL_IC];                     /* IC com die em sobretemp. */
     bool     ow_cell[TOTAL_IC][TOTAL_CELL];        /* Open wire detectado      */
-    float    temp_cell[TOTAL_IC][TOTAL_CELL];      /* Temperatura calculada    */
+    float    temp_die[TOTAL_IC];                   /* Temperatura do die (°C)  */
 } bms_safety_state_t;
 
 /* -----------------------------------------------------------------------
@@ -76,71 +77,67 @@ BMS_StatusTypeDef bms_safety_check_voltage(float volt[TOTAL_IC][TOTAL_CELL],
                                            bms_safety_state_t *state);
 
 /**
- * @brief Converte tensão AUX (NTC) para temperatura em °C.
- *        Utiliza equação Beta do NTC.
- * @param v_aux  Tensão medida no pino AUX (V)
- * @return Temperatura em °C
- */
-float bms_safety_aux_to_celsius(float v_aux);
-
-/**
- * @brief Verifica sobretemperatura.
- *        Popula state->temp_cell a partir de v_aux e verifica limites.
- * @param v_aux  Matriz de tensões AUX [TOTAL_IC][TOTAL_CELL]
+ * @brief Verifica sobretemperatura do DIE do IC (não da célula -- isso é
+ *        responsabilidade do TMS externo).
+ * @param temp_die  Temperatura do die por IC [TOTAL_IC], já em °C
+ *                  (calculada via ITMP_TO_CELSIUS em comm.c)
  * @param state  Estado de segurança
  * @return BMS_OK ou BMS_ERR_TEMP
  */
-BMS_StatusTypeDef bms_safety_check_temperature(float v_aux[TOTAL_IC][TOTAL_CELL],
-                                               bms_safety_state_t *state);
+BMS_StatusTypeDef bms_safety_check_die_temperature(float temp_die[TOTAL_IC],
+                                                   bms_safety_state_t *state);
 
 /**
- * @brief Detecção de fio aberto via método PUP/PDOWN.
- *        [PROTÓTIPO] – sequência MUTE → ADCV(OW=PUP) → ADCV(OW=PDOWN) → compare.
- *        Células com |V_pup − V_pdown| > BMS_OW_DELTA_V marcadas como OW.
+ * @brief Detecção de fio aberto via método canais pares/ímpares (OW[1:0]).
+ *        Sequência: MUTE → ADCV(OW=pares) → lê → ADCV(OW=ímpares) → lê → UNMUTE.
+ *        Células com |V_pares − V_ímpares| > BMS_OW_DELTA_V marcadas como OW
+ *        (comparação feita por par de canais vizinhos, conforme datasheet
+ *        seção "Cell Open Wire Detection").
  *
- * @param volt_pup   Tensões medidas com pull-up   [TOTAL_IC][TOTAL_CELL]
- * @param volt_pdown Tensões medidas com pull-down [TOTAL_IC][TOTAL_CELL]
+ * @param volt_even  Tensões medidas com canais pares habilitados [TOTAL_IC][TOTAL_CELL]
+ * @param volt_odd   Tensões medidas com canais ímpares habilitados [TOTAL_IC][TOTAL_CELL]
  * @param state      Estado de segurança
  * @return BMS_OK ou BMS_ERR_OPEN_WIRE
- *
- * @note TODO: Implementar disparo ADCV com OW=PUP e OW=PDOWN via spiSendCmd().
  */
-BMS_StatusTypeDef bms_safety_check_open_wire(float volt_pup[TOTAL_IC][TOTAL_CELL],
-                                             float volt_pdown[TOTAL_IC][TOTAL_CELL],
+BMS_StatusTypeDef bms_safety_check_open_wire(float volt_even[TOTAL_IC][TOTAL_CELL],
+                                             float volt_odd[TOTAL_IC][TOTAL_CELL],
                                              bms_safety_state_t *state);
 
 /**
- * @brief Lê flags de hardware do RDSTATC/RDSTATD.
- *        [PROTÓTIPO] – parse dos registradores de status do IC.
- *
+ * @brief Lê flags de hardware do RDSTATC/RDSTATD e atualiza state->fault_mask.
  * @param state  Estado de segurança
- * @return BMS_OK ou BMS_ERR_VOLTAGE
- *
- * @note TODO: Implementar leitura SPI de RDSTATC e RDSTATD.
+ * @return BMS_OK (status de comunicação deve ser checado via checkPecFault
+ *         internamente; falhas de PEC aqui não abortam a leitura do outro
+ *         registrador, mas idealmente deveriam propagar BMS_ERR_COMMS --
+ *         ver nota em bms_safety.c)
  */
 BMS_StatusTypeDef bms_safety_check_hw_flags(bms_safety_state_t *state);
 
 /**
- * @brief Task de segurança completa: tensão + temperatura + OW (se habilitado).
+ * @brief Task de segurança completa: tensão + temp. de die + OW (se habilitado).
  * @param volt       Tensões de célula
- * @param v_aux      Tensões AUX (NTC)
+ * @param temp_die   Temperatura do die por IC [TOTAL_IC]
  * @param check_ow   Se true, executa verificação de open wire
  * @param state      Estado de segurança
  * @return BMS_OK ou código de erro
  */
 BMS_StatusTypeDef bms_safety_task(float volt[TOTAL_IC][TOTAL_CELL],
-                                  float v_aux[TOTAL_IC][TOTAL_CELL],
+                                  float temp_die[TOTAL_IC],
                                   bool  check_ow,
                                   bms_safety_state_t *state);
 
 /**
- * @brief Aciona desligamento de segurança (abre AIRs, para balanceamento).
- *        [TODO]: Adicionar controle GPIO das pré-carga / AIRs.
+ * @brief Aciona desligamento de segurança: abre o Shutdown Circuit (EV.7.2.2)
+ *        via GPIO e (TODO) sinaliza falha por CAN.
+ *
+ * !!! ATENÇÃO: usa pino PLACEHOLDER (BMS_CS2_Pin/PC7) -- ver bms_safety.c.
+ * Trocar pelo pino real de controle do AIR assim que definido em hardware.
  */
 void bms_safety_trigger_shutdown(bms_fault_t fault);
 
 /**
- * @brief Limpa todos os flags de falha.
+ * @brief Limpa todos os flags de falha. Chamado por bms_init()/bms_reset()
+ *        (reset manual do BMS, conforme EV.7.2.3).
  */
 void bms_safety_clear_faults(bms_safety_state_t *state);
 
