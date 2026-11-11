@@ -1,4 +1,4 @@
-# Relatório rápido — Firmware BMS ADBMS6830B (STM32G474RE)
+# Firmware BMS ADBMS6830B (STM32G474RE)
 
 Referências: ADBMS6830B Rev. 0, FSAE Rules 2026 V1.0 (EV.7), repositório Manchester Stinger (`g474-bms`, branch `code-refactor`).
 
