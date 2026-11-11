@@ -29,7 +29,6 @@ extern "C" {
 
 #include "stm32g4xx_nucleo.h"
 #include <stdio.h>
-
 #include "../Analog_libs/inc/common.h"
 
 /* Private includes ----------------------------------------------------------*/
@@ -100,6 +99,12 @@ void Error_Handler(void);
 #define BMS_MOSI_GPIO_Port GPIOB
 #define BMS_CS2_Pin GPIO_PIN_7
 #define BMS_CS2_GPIO_Port GPIOC
+#define BMS_LED_Pin GPIO_PIN_6
+#define BMS_LED_GPIO_Port GPIOC
+#define SDC_CTRL_Pin GPIO_PIN_8
+#define SDC_CTRL_GPIO_Port GPIOC
+#define SDC_SENSE_Pin GPIO_PIN_9
+#define SDC_SENSE_GPIO_Port GPIOC
 #define T_SWDIO_Pin GPIO_PIN_13
 #define T_SWDIO_GPIO_Port GPIOA
 #define T_SWCLK_Pin GPIO_PIN_14

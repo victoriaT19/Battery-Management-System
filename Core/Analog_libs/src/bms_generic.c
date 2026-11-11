@@ -350,7 +350,8 @@ void spiWriteData(uint8_t tIC, uint8_t tx_cmd[2], uint8_t *data) {
         for (uint8_t b = 0; b < TX_DATA; b++) cmd[idx++] = data[src + b];
         uint8_t copyArr[TX_DATA];
         memcpy(copyArr, &data[src], TX_DATA);
-        uint16_t dpec = pec10_calc(true, TX_DATA, copyArr);
+        /* Write PEC cobre só os 6 bytes de dados (sem command counter) */
+        uint16_t dpec = pec10_calc(false, TX_DATA, copyArr);
         cmd[idx++] = (uint8_t)(dpec >> 8);
         cmd[idx++] = (uint8_t)(dpec);
     }
@@ -376,9 +377,15 @@ uint32_t bmsPollAdc(uint8_t tx_cmd[2]) {
     bmsCsLow();
     spiWriteBytes(4, cmd);
 
-    uint8_t rd = 0x00;
+    uint8_t  rd = 0x00;
+    uint32_t t0 = HAL_GetTick();
     while (rd != 0xFF) {
-        spiReadBytes(1, &rd);
+        if (!spiReadBytes(1, &rd) ||
+            (HAL_GetTick() - t0) > BMS_POLL_TIMEOUT_MS) {
+            bmsCsHigh();
+            stopTimer();
+            return UINT32_MAX;   /* timeout ou falha SPI */
+        }
     }
 
     bmsCsHigh();

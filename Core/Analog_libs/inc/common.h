@@ -43,12 +43,13 @@
  * Tipo de retorno de status BMS
  * ----------------------------------------------------------------------- */
 typedef enum {
-    BMS_OK              = 0x00,   /* Sem erros                             */
-    BMS_ERR_COMMS       = 0x01,   /* Erro de comunicação SPI / PEC         */
-    BMS_ERR_VOLTAGE     = 0x02,   /* Falha de tensão (OV ou UV)            */
-    BMS_ERR_TEMP        = 0x04,   /* Falha de temperatura                  */
-    BMS_ERR_CURRENT     = 0x08,   /* Falha de corrente                     */
-    BMS_ERR_OPEN_WIRE   = 0x10,   /* Fio aberto detectado                  */
+	BMS_OK = 0x00, /* Sem erros                             */
+	BMS_ERR_COMMS = 0x01, /* Erro de comunicação SPI / PEC         */
+	BMS_ERR_VOLTAGE = 0x02, /* Falha de tensão (OV ou UV)            */
+	BMS_ERR_TEMP = 0x04, /* Falha de temperatura                  */
+	BMS_ERR_CURRENT = 0x08, /* Falha de corrente                     */
+	BMS_ERR_OPEN_WIRE = 0x10, /* Fio aberto detectado                  */
+	BMS_ERR_INTERNAL = 0x20, /* Falha interna do ADBMS6830B (STATC)   */
 } BMS_StatusTypeDef;
 
 /* Alias para compatibilidade com código legado do projeto */

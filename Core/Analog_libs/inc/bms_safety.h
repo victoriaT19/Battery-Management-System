@@ -48,6 +48,7 @@ typedef enum {
     BMS_FAULT_DIE_OVERTEMP = 0x04,   /* Sobretemperatura do DIE do IC      */
     BMS_FAULT_OPEN_WIRE    = 0x08,   /* Fio aberto                         */
     BMS_FAULT_COMMS        = 0x10,   /* Falha de comunicação               */
+    BMS_FAULT_INTERNAL     = 0x20,   /* Falha interna do ADBMS6830B        */
 } bms_fault_t;
 
 /* -----------------------------------------------------------------------
@@ -94,12 +95,15 @@ BMS_StatusTypeDef bms_safety_check_die_temperature(float temp_die[TOTAL_IC],
  *        (comparação feita por par de canais vizinhos, conforme datasheet
  *        seção "Cell Open Wire Detection").
  *
+ * @param volt_norm  Tensões de referência (OW desligado) [TOTAL_IC][TOTAL_CELL]
  * @param volt_even  Tensões medidas com canais pares habilitados [TOTAL_IC][TOTAL_CELL]
  * @param volt_odd   Tensões medidas com canais ímpares habilitados [TOTAL_IC][TOTAL_CELL]
  * @param state      Estado de segurança
  * @return BMS_OK ou BMS_ERR_OPEN_WIRE
+ * Critério: queda > BMS_OW_DROP_MAX_FRAC da tensão de referência.
  */
-BMS_StatusTypeDef bms_safety_check_open_wire(float volt_even[TOTAL_IC][TOTAL_CELL],
+BMS_StatusTypeDef bms_safety_check_open_wire(float volt_norm[TOTAL_IC][TOTAL_CELL],
+                                             float volt_even[TOTAL_IC][TOTAL_CELL],
                                              float volt_odd[TOTAL_IC][TOTAL_CELL],
                                              bms_safety_state_t *state);
 
@@ -130,10 +134,23 @@ BMS_StatusTypeDef bms_safety_task(float volt[TOTAL_IC][TOTAL_CELL],
  * @brief Aciona desligamento de segurança: abre o Shutdown Circuit (EV.7.2.2)
  *        via GPIO e (TODO) sinaliza falha por CAN.
  *
- * !!! ATENÇÃO: usa pino PLACEHOLDER (BMS_CS2_Pin/PC7) -- ver bms_safety.c.
- * Trocar pelo pino real de controle do AIR assim que definido em hardware.
+ * Também acende a luz BMS (BMS_LED) e trava o rearme até reset do MCU.
  */
 void bms_safety_trigger_shutdown(bms_fault_t fault);
+
+/**
+ * @brief Fecha o Shutdown Circuit (SDC_CTRL = alto). BMS é normalmente aberto
+ *        (EV.7.1.3): só deve ser chamada depois de init e verificações OK.
+ *        Recusada (retorna false) se já houve shutdown desde o último reset
+ *        do MCU (EV.7.2.3: só rearma por reset manual).
+ */
+bool bms_safety_close_sdc(void);
+
+/** @brief true se o SDC_SENSE indica SDC fechado (qualquer componente). */
+bool bms_safety_sdc_is_closed(void);
+
+/** @brief Limpa as flags sticky do ADBMS6830B (CLRFLAG e CLOVUV). */
+void bms_safety_clear_hw_flags(void);
 
 /**
  * @brief Limpa todos os flags de falha. Chamado por bms_init()/bms_reset()

@@ -83,6 +83,9 @@ void bms_startAdcvCont(bool enableRedundant);
 /** @brief Lê tensões de célula de todos os ICs e popula volt_cell. */
 BMS_StatusTypeDef readCellVoltage(VoltageTypes voltTypes);
 
+/** @brief Ponteiro para a matriz [IC][célula] de tensões do tipo indicado. */
+float (*bms_getVoltPtr(VoltageTypes t))[TOTAL_CELL];
+
 /** @brief Lê / imprime um registrador para depuração. */
 BMS_StatusTypeDef readRegister(RegisterTypes regTypes);
 
@@ -101,7 +104,7 @@ void bms_reset(void);
 /** @brief Lê tensão de pack (AD29 ou soma das células). */
 BMS_StatusTypeDef readV(void);
 
-/** @brief Lê corrente do shunt (placeholder – AD29 não presente neste projeto). */
+/** @brief Lê corrente do shunt (placeholder – AD29 não presente no projeto). */
 BMS_StatusTypeDef readCurrent(void);
 
 /** @brief Dispara S-ADC para medição durante balanceamento (para PWM brevemente). */

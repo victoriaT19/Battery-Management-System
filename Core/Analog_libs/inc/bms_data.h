@@ -67,7 +67,11 @@
 #define BMS_DIE_TEMP_MAX_C      125.0f  /* Alerta de temp. de die (°C)      */
 #define BMS_DIE_TEMP_MIN_C     (-40.0f) /* Faixa operacional mínima (°C)    */
 #define BMS_BALANCE_DELTA_V     0.010f  /* Delta para início do balanceamento */
-#define BMS_OW_DELTA_V          0.200f  /* Delta mínimo para detecção de OW  */
+#define BMS_OW_DELTA_V          0.200f  /* (obsoleto, não usado)             */
+/* Fio aberto: queda máx. tolerada (fração da tensão normal) com a chave de
+ * OW ligada. Canal íntegro cai ~1/6 (C-ADC) ou ~1/10 (S-ADC); aberto cai ~100%.
+ * Ajuste conforme o resistor de filtro do hardware. */
+#define BMS_OW_DROP_MAX_FRAC    0.5f
 
 /* -----------------------------------------------------------------------
  * Registrador de Configuração A – ADBMS6830B Table 55

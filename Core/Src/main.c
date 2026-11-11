@@ -104,7 +104,11 @@ int main(void)
   MX_FDCAN2_Init();
   MX_TIM2_Init();
   /* USER CODE BEGIN 2 */
-
+  if (bms_init() != BMS_OK)
+  {
+    bms_safety_trigger_shutdown(BMS_FAULT_COMMS);   /* SDC aberto + luz BMS */
+    Error_Handler();
+  }
   /* USER CODE END 2 */
 
   /* Initialize led */
@@ -291,7 +295,7 @@ static void MX_SPI2_Init(void)
   hspi2.Init.CLKPolarity = SPI_POLARITY_LOW;
   hspi2.Init.CLKPhase = SPI_PHASE_1EDGE;
   hspi2.Init.NSS = SPI_NSS_SOFT;
-  hspi2.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_64;
+  hspi2.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_128;
   hspi2.Init.FirstBit = SPI_FIRSTBIT_MSB;
   hspi2.Init.TIMode = SPI_TIMODE_DISABLE;
   hspi2.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
@@ -327,7 +331,7 @@ static void MX_TIM2_Init(void)
 
   /* USER CODE END TIM2_Init 1 */
   htim2.Instance = TIM2;
-  htim2.Init.Prescaler = 128;
+  htim2.Init.Prescaler = 170-1;
   htim2.Init.CounterMode = TIM_COUNTERMODE_UP;
   htim2.Init.Period = 4294967295;
   htim2.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
@@ -372,14 +376,20 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOA_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOC, BMS_CS_Pin|BMS_CS2_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOC, BMS_CS_Pin|BMS_CS2_Pin|BMS_LED_Pin|SDC_CTRL_Pin, GPIO_PIN_RESET);
 
-  /*Configure GPIO pins : BMS_CS_Pin BMS_CS2_Pin */
-  GPIO_InitStruct.Pin = BMS_CS_Pin|BMS_CS2_Pin;
+  /*Configure GPIO pins : BMS_CS_Pin BMS_CS2_Pin BMS_LED_Pin SDC_CTRL_Pin */
+  GPIO_InitStruct.Pin = BMS_CS_Pin|BMS_CS2_Pin|BMS_LED_Pin|SDC_CTRL_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : SDC_SENSE_Pin */
+  GPIO_InitStruct.Pin = SDC_SENSE_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Pull = GPIO_PULLDOWN;
+  HAL_GPIO_Init(SDC_SENSE_GPIO_Port, &GPIO_InitStruct);
 
   /* USER CODE BEGIN MX_GPIO_Init_2 */
 

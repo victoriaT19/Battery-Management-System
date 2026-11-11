@@ -165,10 +165,11 @@ static void calculateStats(VoltageTypes vtype) {
  * Obtido de leitura RDCFG após SRST (conforme Manchester repo bms_resetConfig)
  * ----------------------------------------------------------------------- */
 static void resetConfig(void) {
-    /* CFGA padrão: REFON=0, fc=0 (será configurado no init) */
-    const uint8_t cfgaDefault[TX_DATA] = { 0x00, 0x03, 0xFF, 0x00, 0x00, 0x01 };
-    /* CFGB padrão (datasheet): VUV/VOV zerados, DCTO=0 */
-    const uint8_t cfgbDefault[TX_DATA] = { 0x00, 0x00, 0x7F, 0xF8, 0x00, 0x00 };
+    /* CFGA padrão (datasheet Table 102): CTH=001, FLAG_D=0, SOAKON/OWRNG/OWA=0,
+     * GPO1-10=1 (pull-downs desligados), FC=0. REFON/FC são ajustados no init. */
+    const uint8_t cfgaDefault[TX_DATA] = { 0x01, 0x00, 0x00, 0xFF, 0x03, 0x00 };
+    /* CFGB: tudo zerado; VUV/VOV/DCTO/DTMEN/DTRNG são definidos no init */
+    const uint8_t cfgbDefault[TX_DATA] = { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
 
     for (int ic = 0; ic < TOTAL_IC; ic++) {
         memcpy(&bms.cfa_Tx[ic], cfgaDefault, TX_DATA);
@@ -203,6 +204,7 @@ BMS_StatusTypeDef bms_init(void) {
         bms.cfb_Tx[ic].vov0_3  = (uint8_t)(vov_code & 0x0F);
         bms.cfb_Tx[ic].vov4_11 = (uint8_t)((vov_code >> 4) & 0xFF);
         bms.cfb_Tx[ic].dcto    = 0;
+        bms.cfb_Tx[ic].dtrng   = 0;
         bms.cfb_Tx[ic].dtmen   = 0;
     }
 
@@ -219,6 +221,11 @@ BMS_StatusTypeDef bms_init(void) {
     /* Inicia C-ADC contínuo */
     bms_startAdcvCont(false);
     delayMsActive(12);   /* aguarda filtro encher (~8 ms para avg register) */
+
+    /* Flags sticky voltam setados após reset/sleep (e CxUV enquanto os
+     * registradores de tensão ainda estão em 0x8000): limpa só depois da
+     * primeira conversão para não travar falha espúria. */
+    bms_safety_clear_hw_flags();
 
     g_statusFlags = BMS_OK;
     return BMS_OK;
@@ -344,8 +351,8 @@ BMS_StatusTypeDef readRegister(RegisterTypes regTypes) {
 BMS_StatusTypeDef auxMeasurement(void) {
     ADAX.ow  = 0;
     ADAX.pup = 0;
-    ADAX.ch4 = 1;     /* CH[4:0] = 10111 = ITMP (datasheet Table 24) */
-    ADAX.ch  = 0x07;  /* CH[3:0] = 0111                              */
+    ADAX.ch4 = 1;     /* CH[4:0] = 10011 = ITEMP (datasheet Table 24) */
+    ADAX.ch  = 0x03;  /* CH[3:0] = 0011                               */
 
     spiSendCmd((uint8_t *)&ADAX);
     if (bmsPollAdc(PLAUX) == UINT32_MAX) return BMS_ERR_COMMS;
@@ -367,10 +374,11 @@ BMS_StatusTypeDef auxMeasurement(void) {
  * ----------------------------------------------------------------------- */
 
 /** Cálculo e início de descarga proporcional */
-void startDischarge(float threshold) {
+void startDischarge(float delta_v) {
+    /* delta_v é a diferença sobre Vmin (o balanceador calcula Vmin + delta_v) */
     bms_balancing_task(bms.volt_cell[DISCHARGE_VOLT_TYPE],
                        bms.cfb_Tx, bms.pwma, bms.pwmb,
-                       &g_balState, threshold);
+                       &g_balState, delta_v);
 
     /* Marca células em descarga */
     for (int ic = 0; ic < TOTAL_IC; ic++) {
@@ -395,13 +403,26 @@ BMS_StatusTypeDef balancingMeasurementVoltage(void) {
     ADSV.dcp  = 0;
     ADSV.ow   = 0x00;
     spiSendCmd((uint8_t *)&ADSV);
-    bmsPollAdc(PLSADC);
+    if (bmsPollAdc(PLSADC) == UINT32_MAX) return BMS_ERR_COMMS;
     return readCellVoltage(VOLTAGE_S);
 }
 
+/** Acesso à matriz de tensões (usado pelo open-wire em bms_safety.c) */
+float (*bms_getVoltPtr(VoltageTypes t))[TOTAL_CELL] {
+    return bms.volt_cell[t];
+}
+
+/** Medição perdida/interrompida (EV.7.3.4d): trava falha e abre o SDC */
+static BMS_StatusTypeDef commsFailure(BMS_StatusTypeDef status) {
+    stopDischarge();
+    g_safetyState.fault_mask |= BMS_FAULT_COMMS;
+    bms_safety_trigger_shutdown(BMS_FAULT_COMMS);
+    g_statusFlags |= status;
+    return status;
+}
+
 void startBalancing(float delta_v) {
-    float threshold = g_balState.v_min + delta_v;
-    startDischarge(threshold);
+    startDischarge(delta_v);
 }
 
 /* -----------------------------------------------------------------------
@@ -435,6 +456,7 @@ void bms_reset(void) {
  * ----------------------------------------------------------------------- */
 BMS_StatusTypeDef programLoop(void) {
     static uint32_t owCheckTick = 0;
+    static bool     sdcArmed    = false;   /* SDC já foi fechado pelo BMS */
     const uint32_t  OW_CHECK_INTERVAL_MS = 5000;
 
     BMS_StatusTypeDef status;
@@ -442,7 +464,7 @@ BMS_StatusTypeDef programLoop(void) {
     /* 1. Lê tensões de célula (S-ADC para balanceamento) */
     bmsWakeupIc(TOTAL_IC);
     status = balancingMeasurementVoltage();
-    if (status != BMS_OK) return status;
+    if (status != BMS_OK) return commsFailure(status);
 
     /* 2. Verifica tensão */
     status = checkVoltage();
@@ -456,7 +478,7 @@ BMS_StatusTypeDef programLoop(void) {
     /* 3. Lê temperatura */
     bmsWakeupIc(TOTAL_IC);
     status = auxMeasurement();
-    if (status != BMS_OK) return status;
+    if (status != BMS_OK) return commsFailure(status);
 
     status = checkTemp();
     if (status != BMS_OK) {
@@ -468,7 +490,9 @@ BMS_StatusTypeDef programLoop(void) {
 
     /* 4. Open wire periódico (a cada OW_CHECK_INTERVAL_MS) */
     uint32_t now = HAL_GetTick();
-    if (now - owCheckTick > OW_CHECK_INTERVAL_MS) {
+    /* Primeiro ciclo (SDC ainda aberto) também roda o open-wire/flags de HW
+     * antes de liberar o SDC. */
+    if (!sdcArmed || now - owCheckTick > OW_CHECK_INTERVAL_MS) {
         owCheckTick = now;
         /* Sequência real MUTE → ADCV(pares)/ADCV(ímpares) → UNMUTE →
          * compara, encapsulada em bms_safety_task() (ver bms_safety.c).
@@ -478,12 +502,20 @@ BMS_StatusTypeDef programLoop(void) {
                          /*check_ow=*/true, &g_safetyState);
     }
 
+    /* 4b. Libera o Shutdown Circuit só após um ciclo completo sem falhas.
+     * O BMS é normalmente aberto (EV.7.1.3): após qualquer shutdown o
+     * rearme só ocorre por reset do MCU (bms_safety_close_sdc recusa). */
+    if (!sdcArmed && g_safetyState.fault_mask == BMS_FAULT_NONE) {
+        sdcArmed = bms_safety_close_sdc();
+    }
+
     /* 5. Balanceamento (se habilitado e sem falhas) */
     g_statusFlags = BMS_OK;
     /* EV.7.3.3: balanceamento não é permitido com o Shutdown Circuit
      * aberto. Trava explícita aqui, independente da ordem dos checks
      * acima -- não confiar apenas nos early-returns. */
-    if (g_balancingEnabled && g_safetyState.fault_mask == BMS_FAULT_NONE) {
+    if (g_balancingEnabled && g_safetyState.fault_mask == BMS_FAULT_NONE &&
+        bms_safety_sdc_is_closed()) {
         bmsWakeupIc(TOTAL_IC);
         startBalancing(g_balDelta);
     } else if (g_balancingEnabled) {
